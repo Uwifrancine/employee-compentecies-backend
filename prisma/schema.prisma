@@ -1,0 +1,271 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
+enum AppRole {
+  admin
+  employee
+  hr
+}
+
+enum EvaluatorType {
+  self
+  supervisor
+}
+
+enum DevPlanStatus {
+  open
+  in_progress
+  completed
+}
+
+enum QuestionType {
+  multipleChoice
+  checkbox
+  select
+}
+
+// ─── Models ───────────────────────────────────────────────────────────────────
+
+model User {
+  id                 String   @id @default(uuid())
+  email              String   @unique
+  passwordHash       String   @map("password_hash")
+  fullName           String   @map("full_name")
+  mustChangePassword Boolean  @default(false) @map("must_change_password")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  jobTitleId   String?  @map("job_title_id")
+  jobTitle     JobTitle? @relation(fields: [jobTitleId], references: [id])
+
+  supervisorId String?  @map("supervisor_id")
+  supervisor   User?    @relation("Subordinates", fields: [supervisorId], references: [id])
+  subordinates User[]   @relation("Subordinates")
+
+  roles               UserRole[]
+  evaluationsAsEmployee  Evaluation[]    @relation("EmployeeEvaluations")
+  evaluationsAsEvaluator Evaluation[]    @relation("EvaluatorEvaluations")
+  devPlansAsEmployee  DevelopmentPlan[] @relation("EmployeeDevPlans")
+  devPlansAsSupervisor DevelopmentPlan[] @relation("SupervisorDevPlans")
+  quizzes             Quiz[]
+  quizAssignmentsAssigned  QuizAssignment[] @relation("AssignedBy")
+  quizAssignmentsReceived  QuizAssignment[] @relation("AssignedTo")
+  quizAttempts        QuizAttempt[]
+
+  @@map("users")
+}
+
+model UserRole {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      AppRole
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([userId, role])
+  @@map("user_roles")
+}
+
+model JobTitle {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  competencies Competency[]
+  users        User[]
+  evaluations  Evaluation[]
+
+  @@map("job_titles")
+}
+
+model Competency {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  jobTitleId String   @map("job_title_id")
+  jobTitle   JobTitle @relation(fields: [jobTitleId], references: [id], onDelete: Cascade)
+
+  evaluationScores EvaluationScore[]
+
+  @@map("competencies")
+}
+
+model Evaluation {
+  id             String        @id @default(uuid())
+  createdAt      DateTime      @default(now()) @map("created_at")
+  overallPercent Float         @map("overall_percent")
+  notes          String?
+  evaluatorType  EvaluatorType @map("evaluator_type")
+
+  employeeId  String @map("employee_id")
+  employee    User   @relation("EmployeeEvaluations", fields: [employeeId], references: [id])
+
+  evaluatorId String @map("evaluator_id")
+  evaluator   User   @relation("EvaluatorEvaluations", fields: [evaluatorId], references: [id])
+
+  jobTitleId String   @map("job_title_id")
+  jobTitle   JobTitle @relation(fields: [jobTitleId], references: [id])
+
+  scores          EvaluationScore[]
+  developmentPlans DevelopmentPlan[]
+
+  @@map("evaluations")
+}
+
+model EvaluationScore {
+  id      String  @id @default(uuid())
+  score   Float
+  comment String?
+
+  evaluationId String     @map("evaluation_id")
+  evaluation   Evaluation @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
+
+  competencyId String     @map("competency_id")
+  competency   Competency @relation(fields: [competencyId], references: [id])
+
+  @@unique([evaluationId, competencyId])
+  @@map("evaluation_scores")
+}
+
+model DevelopmentPlan {
+  id         String        @id @default(uuid())
+  title      String
+  summary    String?
+  status     DevPlanStatus @default(open)
+  targetDate DateTime?     @map("target_date")
+  createdAt  DateTime      @default(now()) @map("created_at")
+  updatedAt  DateTime      @updatedAt @map("updated_at")
+
+  employeeId String @map("employee_id")
+  employee   User   @relation("EmployeeDevPlans", fields: [employeeId], references: [id])
+
+  supervisorId String @map("supervisor_id")
+  supervisor   User   @relation("SupervisorDevPlans", fields: [supervisorId], references: [id])
+
+  evaluationId String?     @map("evaluation_id")
+  evaluation   Evaluation? @relation(fields: [evaluationId], references: [id])
+
+  items DevPlanItem[]
+
+  @@map("development_plans")
+}
+
+model DevPlanItem {
+  id       String        @id @default(uuid())
+  action   String
+  status   DevPlanStatus @default(open)
+  dueDate  DateTime?     @map("due_date")
+  createdAt DateTime     @default(now()) @map("created_at")
+
+  planId String          @map("plan_id")
+  plan   DevelopmentPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@map("dev_plan_items")
+}
+
+model Quiz {
+  id          String   @id @default(uuid())
+  title       String
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  supervisorId String @map("supervisor_id")
+  supervisor   User   @relation(fields: [supervisorId], references: [id])
+
+  questions   QuizQuestion[]
+  assignments QuizAssignment[]
+
+  @@map("quizzes")
+}
+
+model QuizQuestion {
+  id           String       @id @default(uuid())
+  prompt       String
+  orderIndex   Int          @default(0) @map("order_index")
+  questionType QuestionType @default(multipleChoice) @map("question_type")
+  createdAt    DateTime     @default(now()) @map("created_at")
+
+  quizId String @map("quiz_id")
+  quiz   Quiz   @relation(fields: [quizId], references: [id], onDelete: Cascade)
+
+  choices QuizChoice[]
+  answers QuizAnswer[]
+
+  @@map("quiz_questions")
+}
+
+model QuizChoice {
+  id         String @id @default(uuid())
+  text       String
+  isCorrect  Boolean @default(false) @map("is_correct")
+  orderIndex Int     @default(0) @map("order_index")
+
+  questionId String       @map("question_id")
+  question   QuizQuestion @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  answers QuizAnswer[]
+
+  @@map("quiz_choices")
+}
+
+model QuizAssignment {
+  id         String   @id @default(uuid())
+  status     String   @default("pending")
+  assignedAt DateTime @default(now()) @map("assigned_at")
+
+  quizId String @map("quiz_id")
+  quiz   Quiz   @relation(fields: [quizId], references: [id])
+
+  employeeId String @map("employee_id")
+  employee   User   @relation("AssignedTo", fields: [employeeId], references: [id])
+
+  assignedBy   String @map("assigned_by")
+  assignedByUser User @relation("AssignedBy", fields: [assignedBy], references: [id])
+
+  attempts QuizAttempt[]
+
+  @@map("quiz_assignments")
+}
+
+model QuizAttempt {
+  id          String   @id @default(uuid())
+  scorePct    Float    @default(0) @map("score_pct")
+  submittedAt DateTime @default(now()) @map("submitted_at")
+
+  assignmentId String         @map("assignment_id")
+  assignment   QuizAssignment @relation(fields: [assignmentId], references: [id])
+
+  employeeId String @map("employee_id")
+  employee   User   @relation(fields: [employeeId], references: [id])
+
+  answers QuizAnswer[]
+
+  @@map("quiz_attempts")
+}
+
+model QuizAnswer {
+  id String @id @default(uuid())
+
+  attemptId String      @map("attempt_id")
+  attempt   QuizAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+
+  questionId String       @map("question_id")
+  question   QuizQuestion @relation(fields: [questionId], references: [id])
+
+  choiceId String?     @map("choice_id")
+  choice   QuizChoice? @relation(fields: [choiceId], references: [id])
+
+  @@map("quiz_answers")
+}
