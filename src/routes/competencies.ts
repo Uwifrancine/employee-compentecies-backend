@@ -37,7 +37,7 @@ router.get("/:id", async (req, res) => {
 });
 
 // POST /api/competencies
-router.post("/", requireRole("admin"), async (req, res) => {
+router.post("/", requireRole("admin", "hr"), async (req, res) => {
   const parsed = schema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.flatten() });
@@ -51,7 +51,7 @@ router.post("/", requireRole("admin"), async (req, res) => {
 });
 
 // PUT /api/competencies/:id
-router.put("/:id", requireRole("admin"), async (req, res) => {
+router.put("/:id", requireRole("admin", "hr"), async (req, res) => {
   const parsed = schema.partial().safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.flatten() });
@@ -66,7 +66,7 @@ router.put("/:id", requireRole("admin"), async (req, res) => {
 });
 
 // DELETE /api/competencies/:id
-router.delete("/:id", requireRole("admin"), async (req, res) => {
+router.delete("/:id", requireRole("admin", "hr"), async (req, res) => {
   await prisma.competency.delete({ where: { id: req.params.id } });
   res.status(204).send();
 });

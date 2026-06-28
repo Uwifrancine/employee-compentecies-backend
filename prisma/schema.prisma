@@ -97,6 +97,7 @@ model Competency {
   jobTitle   JobTitle @relation(fields: [jobTitleId], references: [id], onDelete: Cascade)
 
   evaluationScores EvaluationScore[]
+  quizzes          Quiz[]
 
   @@map("competencies")
 }
@@ -184,6 +185,9 @@ model Quiz {
   supervisorId String @map("supervisor_id")
   supervisor   User   @relation(fields: [supervisorId], references: [id])
 
+  competencyId String?     @map("competency_id")
+  competency   Competency? @relation(fields: [competencyId], references: [id])
+
   questions   QuizQuestion[]
   assignments QuizAssignment[]
 
@@ -223,6 +227,7 @@ model QuizChoice {
 model QuizAssignment {
   id         String   @id @default(uuid())
   status     String   @default("pending")
+  isVisible  Boolean  @default(false) @map("is_visible")
   assignedAt DateTime @default(now()) @map("assigned_at")
 
   quizId String @map("quiz_id")

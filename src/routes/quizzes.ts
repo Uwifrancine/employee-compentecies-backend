@@ -9,6 +9,7 @@ router.use(authenticate);
 const quizSchema = z.object({
   title: z.string().min(1),
   description: z.string().optional(),
+  competencyId: z.string().uuid().optional(),
 });
 
 const questionSchema = z.object({
@@ -35,6 +36,7 @@ router.get("/", async (req, res) => {
     where: isAdminOrHr ? undefined : { supervisorId: req.user!.userId },
     include: {
       supervisor: { select: { id: true, fullName: true } },
+      competency: { select: { id: true, name: true } },
       _count: { select: { questions: true, assignments: true } },
     },
     orderBy: { createdAt: "desc" },
