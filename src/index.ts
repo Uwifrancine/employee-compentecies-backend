@@ -16,7 +16,13 @@ const app = express();
 const PORT = process.env.PORT ?? 4000;
 
 const allowedOrigins = (process.env.CORS_ORIGIN ?? "http://localhost:3000").split(",").map((s) => s.trim());
-app.use(cors({ origin: (origin, cb) => cb(null, !origin || allowedOrigins.includes(origin)) }));
+app.use(cors({
+  origin: (origin, cb) => {
+    const allowed = !origin || allowedOrigins.includes(origin);
+    cb(allowed ? null : new Error("CORS not allowed"), allowed);
+  },
+  credentials: true
+}));
 app.use(express.json());
 
 app.get("/health", (_req, res) => res.json({ status: "ok" }));

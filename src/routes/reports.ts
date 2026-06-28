@@ -31,8 +31,10 @@ router.get("/individual/:employeeId", async (req, res) => {
         supervisor: { select: { id: true, fullName: true } },
       },
     }),
+    // Only show evaluations FOR this employee (where they are the evaluee)
+    // NOT evaluations they created for their team members
     prisma.evaluation.findMany({
-      where: { employeeId },
+      where: { employeeId: employeeId },
       include: {
         scores: { include: { competency: { select: { id: true, name: true } } } },
         jobTitle: { select: { name: true } },
@@ -40,12 +42,12 @@ router.get("/individual/:employeeId", async (req, res) => {
       orderBy: { createdAt: "desc" },
     }),
     prisma.developmentPlan.findMany({
-      where: { employeeId },
+      where: { employeeId: employeeId },
       include: { items: true },
       orderBy: { createdAt: "desc" },
     }),
     prisma.quizAttempt.findMany({
-      where: { employeeId },
+      where: { employeeId: employeeId },
       include: { assignment: { include: { quiz: { select: { title: true } } } } },
       orderBy: { submittedAt: "desc" },
     }),

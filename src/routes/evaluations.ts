@@ -28,11 +28,12 @@ function overallPercent(scores: { score: number }[]): number {
 function buildWhere(userId: string, roles: string[]) {
   const isAdminOrHr = roles.some((r) => ["admin", "hr"].includes(r));
   if (isAdminOrHr) return {};
+  // Only show user's own evaluations (as employee or evaluator)
+  // Team evaluations are shown on "My Team" page, not here
   return {
     OR: [
-      { employeeId: userId },
-      { evaluatorId: userId },
-      { employee: { supervisorId: userId } }, // supervisor sees their reports' evals
+      { employeeId: userId }, // Evaluations FOR this user
+      { evaluatorId: userId }, // Evaluations they created
     ],
   };
 }

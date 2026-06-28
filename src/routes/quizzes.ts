@@ -22,7 +22,7 @@ const questionSchema = z.object({
         text: z.string().min(1),
         isCorrect: z.boolean(),
         orderIndex: z.number().int().min(0).optional(),
-      })
+      }),
     )
     .min(2),
 });
@@ -36,7 +36,6 @@ router.get("/", async (req, res) => {
     where: isAdminOrHr ? undefined : { supervisorId: req.user!.userId },
     include: {
       supervisor: { select: { id: true, fullName: true } },
-      competency: { select: { id: true, name: true } },
       _count: { select: { questions: true, assignments: true } },
     },
     orderBy: { createdAt: "desc" },

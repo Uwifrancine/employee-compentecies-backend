@@ -31,7 +31,7 @@ router.get("/", async (req, res) => {
       : {
           OR: [
             { assignedBy: req.user!.userId },
-            { employeeId: req.user!.userId, isVisible: true },
+            { employeeId: req.user!.userId },
           ],
         },
     include: {
@@ -121,26 +121,6 @@ router.post("/", async (req, res) => {
   res.status(201).json(assignment);
 });
 
-// PATCH /api/quiz-assignments/:id/visibility — supervisor toggles employee visibility
-router.patch("/:id/visibility", async (req, res) => {
-  const assignment = await prisma.quizAssignment.findUnique({ where: { id: req.params.id } });
-  if (!assignment) {
-    res.status(404).json({ error: "Assignment not found" });
-    return;
-  }
-  const roles = req.user!.roles as string[];
-  const isAdminOrHr = roles.some((r) => ["admin", "hr"].includes(r));
-  if (!isAdminOrHr && assignment.assignedBy !== req.user!.userId) {
-    res.status(403).json({ error: "Access denied" });
-    return;
-  }
-  const { isVisible } = req.body as { isVisible: boolean };
-  const updated = await prisma.quizAssignment.update({
-    where: { id: req.params.id },
-    data: { isVisible: Boolean(isVisible) },
-  });
-  res.json(updated);
-});
 
 // POST /api/quiz-assignments/:id/attempt  — employee submits answers
 router.post("/:id/attempt", async (req, res) => {
