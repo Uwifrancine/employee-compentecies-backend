@@ -112,6 +112,7 @@ router.post("/", async (req, res) => {
     data: {
       ...parsed.data,
       assignedBy: req.user!.userId,
+      isVisible: true,
     },
     include: {
       quiz: { select: { id: true, title: true } },
