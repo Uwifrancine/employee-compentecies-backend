@@ -36,8 +36,19 @@ router.get("/:id", async (req, res) => {
   res.json(competency);
 });
 
-// POST /api/competencies
-router.post("/", requireRole("admin", "hr"), async (req, res) => {
+// POST /api/competencies — HR or Supervisor
+router.post("/", async (req, res) => {
+  const isHR = req.user?.roles.includes("hr");
+  const isSupervisor = (await prisma.user.findUnique({
+    where: { id: req.user!.userId },
+    select: { _count: { select: { subordinates: true } } },
+  }))?.["_count"]?.subordinates || 0 > 0;
+
+  if (!isHR && !isSupervisor) {
+    res.status(403).json({ error: "Insufficient permissions" });
+    return;
+  }
+
   const parsed = schema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.flatten() });
@@ -50,8 +61,19 @@ router.post("/", requireRole("admin", "hr"), async (req, res) => {
   res.status(201).json(competency);
 });
 
-// PUT /api/competencies/:id
-router.put("/:id", requireRole("admin", "hr"), async (req, res) => {
+// PUT /api/competencies/:id — HR or Supervisor
+router.put("/:id", async (req, res) => {
+  const isHR = req.user?.roles.includes("hr");
+  const isSupervisor = (await prisma.user.findUnique({
+    where: { id: req.user!.userId },
+    select: { _count: { select: { subordinates: true } } },
+  }))?.["_count"]?.subordinates || 0 > 0;
+
+  if (!isHR && !isSupervisor) {
+    res.status(403).json({ error: "Insufficient permissions" });
+    return;
+  }
+
   const parsed = schema.partial().safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.flatten() });
@@ -65,8 +87,19 @@ router.put("/:id", requireRole("admin", "hr"), async (req, res) => {
   res.json(competency);
 });
 
-// DELETE /api/competencies/:id
-router.delete("/:id", requireRole("admin", "hr"), async (req, res) => {
+// DELETE /api/competencies/:id — HR or Supervisor
+router.delete("/:id", async (req, res) => {
+  const isHR = req.user?.roles.includes("hr");
+  const isSupervisor = (await prisma.user.findUnique({
+    where: { id: req.user!.userId },
+    select: { _count: { select: { subordinates: true } } },
+  }))?.["_count"]?.subordinates || 0 > 0;
+
+  if (!isHR && !isSupervisor) {
+    res.status(403).json({ error: "Insufficient permissions" });
+    return;
+  }
+
   await prisma.competency.delete({ where: { id: req.params.id } });
   res.status(204).send();
 });

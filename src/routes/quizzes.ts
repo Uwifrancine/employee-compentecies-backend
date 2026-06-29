@@ -10,6 +10,7 @@ const quizSchema = z.object({
   title: z.string().min(1),
   description: z.string().optional(),
   competencyId: z.string().uuid().optional(),
+  jobTitleId: z.string().uuid().optional(),
 });
 
 const questionSchema = z.object({
@@ -37,6 +38,7 @@ router.get("/", async (req, res) => {
     include: {
       supervisor: { select: { id: true, fullName: true } },
       competency: { select: { id: true, name: true, jobTitle: { select: { id: true, name: true } } } },
+      jobTitle: { select: { id: true, name: true } },
       _count: { select: { questions: true, assignments: true } },
     },
     orderBy: { createdAt: "desc" },
@@ -72,6 +74,21 @@ router.post("/", async (req, res) => {
     return;
   }
 
+  if (parsed.data.jobTitleId) {
+    const openAssignments = await prisma.quizAssignment.findMany({
+      where: {
+        quiz: { jobTitleId: parsed.data.jobTitleId },
+        status: { not: "completed" },
+      },
+      take: 1,
+    });
+
+    if (openAssignments.length > 0) {
+      res.status(400).json({ error: "Cannot create quiz while employees are still completing assignments for this job title" });
+      return;
+    }
+  }
+
   const quiz = await prisma.quiz.create({
     data: { ...parsed.data, supervisorId: req.user!.userId },
   });
@@ -86,9 +103,8 @@ router.put("/:id", async (req, res) => {
     return;
   }
 
-  const roles = req.user!.roles as string[];
-  if (!roles.includes("admin") && quiz.supervisorId !== req.user!.userId) {
-    res.status(403).json({ error: "Access denied" });
+  if (quiz.supervisorId !== req.user!.userId) {
+    res.status(403).json({ error: "Only the quiz creator can edit" });
     return;
   }
 
@@ -110,12 +126,13 @@ router.delete("/:id", async (req, res) => {
     return;
   }
 
-  const roles = req.user!.roles as string[];
-  if (!roles.includes("admin") && quiz.supervisorId !== req.user!.userId) {
-    res.status(403).json({ error: "Access denied" });
+  if (quiz.supervisorId !== req.user!.userId) {
+    res.status(403).json({ error: "Only the quiz creator can delete" });
     return;
   }
 
+  // Delete all assignments first, then delete quiz
+  await prisma.quizAssignment.deleteMany({ where: { quizId: req.params.id } });
   await prisma.quiz.delete({ where: { id: req.params.id } });
   res.status(204).send();
 });

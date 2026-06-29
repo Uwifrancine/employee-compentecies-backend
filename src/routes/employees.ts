@@ -11,6 +11,7 @@ const updateSchema = z.object({
   email: z.string().email().optional(),
   jobTitleId: z.string().uuid().nullable().optional(),
   supervisorId: z.string().uuid().nullable().optional(),
+  isActive: z.boolean().optional(),
   roles: z.array(z.enum(["admin", "employee", "hr"])).optional(),
 });
 
@@ -19,6 +20,7 @@ const employeeSelect = {
   email: true,
   fullName: true,
   mustChangePassword: true,
+  isActive: true,
   createdAt: true,
   jobTitle: { select: { id: true, name: true } },
   supervisor: { select: { id: true, fullName: true } },
@@ -86,11 +88,42 @@ router.put("/:id", requireRole("admin", "hr"), async (req, res) => {
     return;
   }
 
-  const { roles, ...data } = parsed.data;
+  const { roles, jobTitleId, supervisorId, isActive, ...data } = parsed.data;
+  const isAdmin = req.user?.roles.includes("admin");
+  const isHr = req.user?.roles.includes("hr");
+
+  // Only admins can update isActive, roles; only HR can update jobTitleId, supervisorId
+  if (isActive !== undefined && !isAdmin) {
+    res.status(403).json({ error: "Only admins can update employee status" });
+    return;
+  }
+
+  if ((jobTitleId !== undefined || supervisorId !== undefined) && !isHr) {
+    res.status(403).json({ error: "Only HR can assign job titles and supervisors" });
+    return;
+  }
+
+  if (roles && !isAdmin) {
+    res.status(403).json({ error: "Only admins can assign roles" });
+    return;
+  }
+
+  // Check if trying to assign supervisor to admin user
+  if (supervisorId !== undefined && supervisorId !== null) {
+    const targetUser = await prisma.user.findUnique({
+      where: { id: req.params.id },
+      select: { roles: { select: { role: true } } },
+    });
+    const targetUserRole = targetUser?.roles[0]?.role ?? "employee";
+    if (targetUserRole === "admin" || roles?.includes("admin")) {
+      res.status(400).json({ error: "Admin users cannot have supervisors" });
+      return;
+    }
+  }
 
   const user = await prisma.user.update({
     where: { id: req.params.id },
-    data,
+    data: { ...data, isActive, jobTitleId, supervisorId },
     select: employeeSelect,
   });
 

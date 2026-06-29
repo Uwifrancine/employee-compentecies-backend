@@ -20,6 +20,10 @@ const submitSchema = z.object({
   ),
 });
 
+const visibilitySchema = z.object({
+  isVisible: z.boolean(),
+});
+
 // GET /api/quiz-assignments
 router.get("/", async (req, res) => {
   const roles = req.user!.roles as string[];
@@ -35,7 +39,7 @@ router.get("/", async (req, res) => {
           ],
         },
     include: {
-      quiz: { select: { id: true, title: true } },
+      quiz: { select: { id: true, title: true, supervisorId: true } },
       employee: { select: { id: true, fullName: true } },
       attempts: { select: { scorePct: true, submittedAt: true }, orderBy: { submittedAt: "desc" }, take: 1 },
       _count: { select: { attempts: true } },
@@ -60,7 +64,13 @@ router.get("/:id", async (req, res) => {
       },
       employee: { select: { id: true, fullName: true } },
       attempts: {
-        include: { answers: { include: { choice: true } } },
+        include: {
+          answers: {
+            include: {
+              choice: { select: { id: true, text: true, isCorrect: true } },
+            },
+          },
+        },
         orderBy: { submittedAt: "desc" },
       },
     },
@@ -203,6 +213,45 @@ router.post("/:id/attempt", async (req, res) => {
   });
 
   res.status(201).json({ ...attempt, scorePct, correct, total });
+});
+
+// PATCH /api/quiz-assignments/:id/visibility — update visibility
+router.patch("/:id/visibility", async (req, res) => {
+  const parsed = visibilitySchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.flatten() });
+    return;
+  }
+
+  const assignment = await prisma.quizAssignment.findUnique({
+    where: { id: req.params.id },
+    include: { quiz: { select: { supervisorId: true } } },
+  });
+
+  if (!assignment) {
+    res.status(404).json({ error: "Assignment not found" });
+    return;
+  }
+
+  const roles = req.user!.roles as string[];
+  const isAdminOrHr = roles.some((r) => ["admin", "hr"].includes(r));
+  const isSupervisor = assignment.quiz.supervisorId === req.user!.userId;
+
+  if (!isAdminOrHr && !isSupervisor) {
+    res.status(403).json({ error: "Only admin, HR, or quiz creator can change visibility" });
+    return;
+  }
+
+  const updated = await prisma.quizAssignment.update({
+    where: { id: req.params.id },
+    data: { isVisible: parsed.data.isVisible },
+    include: {
+      quiz: { select: { id: true, title: true } },
+      employee: { select: { id: true, fullName: true } },
+    },
+  });
+
+  res.json(updated);
 });
 
 export default router;

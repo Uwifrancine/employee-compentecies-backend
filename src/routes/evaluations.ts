@@ -111,6 +111,7 @@ router.post("/", async (req, res) => {
     }
   }
 
+  // Supervisors can evaluate anytime, no need for self-evaluation first
   // Determine overall: supervisor decision shortcut OR calculated from scores
   const overallPercent =
     decision === "pass" ? 100 :

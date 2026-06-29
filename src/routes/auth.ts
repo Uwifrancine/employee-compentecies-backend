@@ -57,6 +57,11 @@ router.post("/login", async (req, res) => {
     return;
   }
 
+  if (!user.isActive) {
+    res.status(401).json({ error: "Account is inactive. Contact your administrator." });
+    return;
+  }
+
   const roles = user.roles.map((r) => r.role as string);
   const token = signToken(user.id, user.email, roles);
 
@@ -89,6 +94,12 @@ router.post("/register", authenticate, async (req, res) => {
 
   const { email, password, fullName, jobTitleId, supervisorId, roles } = parsed.data;
 
+  // Admins cannot assign job titles and supervisors during registration
+  if (jobTitleId || supervisorId) {
+    res.status(400).json({ error: "Job title and supervisor must be assigned by HR through the HR interface" });
+    return;
+  }
+
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) {
     res.status(409).json({ error: "Email already in use" });
@@ -102,9 +113,8 @@ router.post("/register", authenticate, async (req, res) => {
       email,
       passwordHash,
       fullName,
-      jobTitleId,
-      supervisorId,
       mustChangePassword: true,
+      isActive: true,
       roles: {
         create: roles.map((role) => ({ role: role as "admin" | "employee" | "hr" })),
       },
@@ -135,6 +145,7 @@ router.post("/seed-admin", async (_req, res) => {
       passwordHash,
       fullName: "System Admin",
       mustChangePassword: true,
+      isActive: true,
       roles: { create: [{ role: "admin" }] },
     },
     include: { roles: true },
