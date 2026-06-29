@@ -11,16 +11,17 @@ const createSchema = z.object({
   jobTitleId: z.string().uuid(),
   evaluatorType: z.enum(["self", "supervisor"]),
   notes: z.string().optional(),
+  decision: z.enum(["pass", "fail"]).optional(),
   scores: z.array(
     z.object({
       competencyId: z.string().uuid(),
       score: z.number().min(0).max(100),
       comment: z.string().optional(),
     })
-  ),
+  ).default([]),
 });
 
-function overallPercent(scores: { score: number }[]): number {
+function calcOverall(scores: { score: number }[]): number {
   if (!scores.length) return 0;
   return scores.reduce((sum, s) => sum + s.score, 0) / scores.length;
 }
@@ -28,12 +29,11 @@ function overallPercent(scores: { score: number }[]): number {
 function buildWhere(userId: string, roles: string[]) {
   const isAdminOrHr = roles.some((r) => ["admin", "hr"].includes(r));
   if (isAdminOrHr) return {};
-  // Only show user's own evaluations (as employee or evaluator)
-  // Team evaluations are shown on "My Team" page, not here
   return {
     OR: [
-      { employeeId: userId }, // Evaluations FOR this user
-      { evaluatorId: userId }, // Evaluations they created
+      { employeeId: userId },
+      { evaluatorId: userId },
+      { employee: { supervisorId: userId } },
     ],
   };
 }
@@ -77,8 +77,11 @@ router.get("/:id", async (req, res) => {
   const isAdminOrHr = roles.some((r) => ["admin", "hr"].includes(r));
   const isInvolved =
     evaluation.employeeId === req.user!.userId || evaluation.evaluatorId === req.user!.userId;
+  const isSupervisor = await prisma.user
+    .findFirst({ where: { id: evaluation.employeeId, supervisorId: req.user!.userId } })
+    .then(Boolean);
 
-  if (!isAdminOrHr && !isInvolved) {
+  if (!isAdminOrHr && !isInvolved && !isSupervisor) {
     res.status(403).json({ error: "Access denied" });
     return;
   }
@@ -94,19 +97,35 @@ router.post("/", async (req, res) => {
     return;
   }
 
-  const { scores, employeeId: rawEmployeeId, ...rest } = parsed.data;
+  const { scores, decision, employeeId: rawEmployeeId, ...rest } = parsed.data;
   const employeeId = rawEmployeeId ?? req.user!.userId;
-  const overall = overallPercent(scores);
+
+  // Prevent duplicate self-evaluations for the same employee + job title
+  if (rest.evaluatorType === "self") {
+    const existing = await prisma.evaluation.findFirst({
+      where: { employeeId, jobTitleId: rest.jobTitleId, evaluatorType: "self" },
+    });
+    if (existing) {
+      res.status(409).json({ error: "Self-evaluation already submitted for this role." });
+      return;
+    }
+  }
+
+  // Determine overall: supervisor decision shortcut OR calculated from scores
+  const overallPercent =
+    decision === "pass" ? 100 :
+    decision === "fail" ? 0 :
+    calcOverall(scores);
 
   const evaluation = await prisma.evaluation.create({
     data: {
       ...rest,
       employeeId,
       evaluatorId: req.user!.userId,
-      overallPercent: overall,
-      scores: {
-        create: scores.map(({ competencyId, score, comment }) => ({ competencyId, score, comment })),
-      },
+      overallPercent,
+      scores: scores.length
+        ? { create: scores.map(({ competencyId, score, comment }) => ({ competencyId, score, comment })) }
+        : undefined,
     },
     include: {
       employee: { select: { id: true, fullName: true } },
