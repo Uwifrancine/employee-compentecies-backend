@@ -101,15 +101,19 @@ router.post("/", async (req, res) => {
   const { scores, decision, employeeId: rawEmployeeId, ...rest } = parsed.data;
   const employeeId = rawEmployeeId ?? req.user!.userId;
 
-  // Prevent duplicate self-evaluations for the same employee + job title
-  if (rest.evaluatorType === "self") {
-    const existing = await prisma.evaluation.findFirst({
-      where: { employeeId, jobTitleId: rest.jobTitleId, evaluatorType: "self" },
+  // Prevent duplicate evaluations of the same kind for the same employee + job
+  // title. A self-evaluation and a supervisor evaluation can each exist once.
+  const existing = await prisma.evaluation.findFirst({
+    where: { employeeId, jobTitleId: rest.jobTitleId, evaluatorType: rest.evaluatorType },
+  });
+  if (existing) {
+    res.status(409).json({
+      error:
+        rest.evaluatorType === "self"
+          ? "Self-evaluation already submitted for this role."
+          : "A supervisor evaluation already exists for this employee and role.",
     });
-    if (existing) {
-      res.status(409).json({ error: "Self-evaluation already submitted for this role." });
-      return;
-    }
+    return;
   }
 
   // Supervisors can evaluate anytime, no need for self-evaluation first

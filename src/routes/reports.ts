@@ -103,7 +103,7 @@ router.get("/team/:supervisorId", async (req, res) => {
 
   const memberStats = await Promise.all(
     subordinates.map(async (emp) => {
-      const [latestEval, openPlans, quizAvg] = await Promise.all([
+      const [latestEval, openPlans, quizAvg, supervisorEvalCount] = await Promise.all([
         prisma.evaluation.findFirst({
           where: { employeeId: emp.id },
           orderBy: { createdAt: "desc" },
@@ -115,6 +115,9 @@ router.get("/team/:supervisorId", async (req, res) => {
         prisma.quizAttempt
           .aggregate({ where: { employeeId: emp.id }, _avg: { scorePct: true } })
           .then((r) => r._avg.scorePct),
+        prisma.evaluation.count({
+          where: { employeeId: emp.id, evaluatorType: "supervisor" },
+        }),
       ]);
 
       return {
@@ -123,6 +126,7 @@ router.get("/team/:supervisorId", async (req, res) => {
         latestEvalDate: latestEval?.createdAt ?? null,
         openDevPlans: openPlans,
         avgQuizScore: quizAvg ? Math.round(quizAvg * 10) / 10 : null,
+        supervisorEvaluated: supervisorEvalCount > 0,
       };
     })
   );
