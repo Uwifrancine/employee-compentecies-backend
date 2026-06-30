@@ -32,6 +32,13 @@ enum QuestionType {
   select
 }
 
+enum NotificationType {
+  self_evaluation_submitted
+  evaluation_pending
+  supervisor_evaluation_completed
+  competency_created
+}
+
 // ─── Models ───────────────────────────────────────────────────────────────────
 
 model User {
@@ -60,6 +67,7 @@ model User {
   quizAssignmentsAssigned  QuizAssignment[] @relation("AssignedBy")
   quizAssignmentsReceived  QuizAssignment[] @relation("AssignedTo")
   quizAttempts        QuizAttempt[]
+  notifications       Notification[]
 
   @@map("users")
 }
@@ -278,4 +286,22 @@ model QuizAnswer {
   choice   QuizChoice? @relation(fields: [choiceId], references: [id])
 
   @@map("quiz_answers")
+}
+
+model Notification {
+  id        String           @id @default(uuid())
+  type      NotificationType
+  title     String
+  message   String
+  link      String?
+  isRead    Boolean          @default(false) @map("is_read")
+  createdAt DateTime         @default(now()) @map("created_at")
+
+  // recipient
+  userId String @map("user_id")
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+  @@index([userId, createdAt])
+  @@map("notifications")
 }

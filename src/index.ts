@@ -11,6 +11,7 @@ import devPlansRoutes from "./routes/development-plans";
 import quizzesRoutes from "./routes/quizzes";
 import quizAssignmentsRoutes from "./routes/quiz-assignments";
 import reportsRoutes from "./routes/reports";
+import notificationsRoutes from "./routes/notifications";
 
 const app = express();
 const PORT = process.env.PORT ?? 4000;
@@ -36,6 +37,7 @@ app.use("/api/development-plans", devPlansRoutes);
 app.use("/api/quizzes", quizzesRoutes);
 app.use("/api/quiz-assignments", quizAssignmentsRoutes);
 app.use("/api/reports", reportsRoutes);
+app.use("/api/notifications", notificationsRoutes);
 
 app.use((_req, res) => res.status(404).json({ error: "Not found" }));
 

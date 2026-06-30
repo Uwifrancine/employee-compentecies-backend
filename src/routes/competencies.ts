@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import prisma from "../lib/prisma";
 import { authenticate, requireRole } from "../middleware/auth";
+import { notifyUsers } from "../lib/notify";
 
 const router = Router();
 router.use(authenticate);
@@ -58,6 +59,22 @@ router.post("/", async (req, res) => {
     data: parsed.data,
     include: { jobTitle: { select: { id: true, name: true } } },
   });
+
+  // Notify everyone assigned to this job title that a new competency was added
+  const affected = await prisma.user.findMany({
+    where: { jobTitleId: competency.jobTitleId, id: { not: req.user!.userId } },
+    select: { id: true },
+  });
+  await notifyUsers(
+    affected.map((u) => u.id),
+    {
+      type: "competency_created",
+      title: "New competency added",
+      message: `A new competency "${competency.name}" was added to ${competency.jobTitle.name}.`,
+      link: "/my-competencies",
+    }
+  );
+
   res.status(201).json(competency);
 });
 

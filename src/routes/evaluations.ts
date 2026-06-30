@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import prisma from "../lib/prisma";
 import { authenticate } from "../middleware/auth";
+import { notifyUser } from "../lib/notify";
 
 const router = Router();
 router.use(authenticate);
@@ -129,10 +130,36 @@ router.post("/", async (req, res) => {
         : undefined,
     },
     include: {
-      employee: { select: { id: true, fullName: true } },
+      employee: { select: { id: true, fullName: true, supervisorId: true } },
       scores: { include: { competency: { select: { id: true, name: true } } } },
     },
   });
+
+  // Fire-and-forget notifications (best-effort; must not block the response)
+  if (evaluation.evaluatorType === "self") {
+    // Employee finished a self-evaluation → supervisor now has a pending review
+    if (evaluation.employee.supervisorId) {
+      await notifyUser(evaluation.employee.supervisorId, {
+        type: "self_evaluation_submitted",
+        title: "Self-evaluation submitted",
+        message: `${evaluation.employee.fullName} completed their self-evaluation. A supervisor review is now pending.`,
+        link: "/supervisor",
+      });
+    }
+  } else if (evaluation.evaluatorType === "supervisor") {
+    // Supervisor finished evaluating → notify the employee (unless self-evaluating)
+    if (evaluation.employeeId !== evaluation.evaluatorId) {
+      const passed = evaluation.overallPercent >= 60;
+      await notifyUser(evaluation.employeeId, {
+        type: "supervisor_evaluation_completed",
+        title: "Your evaluation is ready",
+        message: `Your supervisor completed your evaluation — ${Math.round(
+          evaluation.overallPercent
+        )}% (${passed ? "Approved" : "Needs development"}).`,
+        link: "/evaluations",
+      });
+    }
+  }
 
   res.status(201).json(evaluation);
 });
