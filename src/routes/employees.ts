@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
+import bcrypt from "bcryptjs";
 import prisma from "../lib/prisma";
 import { authenticate, requireRole } from "../middleware/auth";
 
@@ -135,6 +136,43 @@ router.put("/:id", requireRole("admin", "hr"), async (req, res) => {
   }
 
   res.json(user);
+});
+
+// PUT /api/employees/:id/reset-password
+router.put("/:id/reset-password", requireRole("admin"), async (req, res) => {
+  const { password } = req.body;
+
+  if (!password || typeof password !== "string") {
+    res.status(400).json({ error: "Password is required" });
+    return;
+  }
+
+  if (password.length < 6) {
+    res.status(400).json({ error: "Password must be at least 6 characters" });
+    return;
+  }
+
+  const employeeId = req.params.id;
+
+  // Verify employee exists
+  const employee = await prisma.user.findUnique({ where: { id: employeeId } });
+  if (!employee) {
+    res.status(404).json({ error: "Employee not found" });
+    return;
+  }
+
+  // Hash password and update
+  const hashedPassword = await bcrypt.hash(password, 10);
+  const updated = await prisma.user.update({
+    where: { id: employeeId },
+    data: {
+      passwordHash: hashedPassword,
+      mustChangePassword: true,
+    },
+    select: employeeSelect,
+  });
+
+  res.json(updated);
 });
 
 // DELETE /api/employees/:id
